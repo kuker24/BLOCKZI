@@ -1,0 +1,1004 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Blockzi Co-Pilot AI 🧩</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #0b0f19;
+      --card-bg: #131b2e;
+      --card-border: #1e293b;
+      --accent-cyan: #00f2fe;
+      --accent-gold: #ffb703;
+      --accent-pink: #f72585;
+      --accent-green: #10b981;
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background-color: var(--bg);
+      color: var(--text-main);
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    header {
+      background: rgba(19, 27, 46, 0.85);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--card-border);
+      padding: 14px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .logo-badge {
+      background: linear-gradient(135deg, #4f46e5, #06b6d4);
+      color: white;
+      font-weight: 800;
+      padding: 6px 12px;
+      border-radius: 8px;
+      font-size: 15px;
+      letter-spacing: 0.5px;
+      box-shadow: 0 4px 12px rgba(6, 182, 212, 0.3);
+    }
+
+    .brand h1 {
+      font-size: 18px;
+      font-weight: 700;
+      letter-spacing: -0.3px;
+    }
+
+    .status-group {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .badge {
+      padding: 5px 12px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 600;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: #1e293b;
+      border: 1px solid #334155;
+    }
+
+    .badge-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+    }
+
+    .badge.connected .badge-dot {
+      background: var(--accent-green);
+      box-shadow: 0 0 8px var(--accent-green);
+    }
+
+    .badge.disconnected .badge-dot {
+      background: var(--accent-gold);
+      box-shadow: 0 0 8px var(--accent-gold);
+    }
+
+    .badge-time {
+      font-family: 'JetBrains Mono', monospace;
+      color: var(--accent-cyan);
+    }
+
+    main {
+      flex: 1;
+      display: grid;
+      grid-template-columns: minmax(360px, 480px) 1fr;
+      gap: 24px;
+      padding: 24px;
+      max-width: 1600px;
+      margin: 0 auto;
+      width: 100%;
+    }
+
+    @media (max-width: 960px) {
+      main {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    /* LEFT: Phone Visualizer */
+    .screen-container {
+      background: #000;
+      border-radius: 24px;
+      border: 2px solid var(--card-border);
+      position: relative;
+      overflow: hidden;
+      aspect-ratio: 1220 / 2712;
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.6);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+
+    #game-img {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      display: block;
+    }
+
+    /* Board Overlay: X0=41, Y0=731, W=1138, H=1138 of 1220x2712 */
+    .board-overlay {
+      position: absolute;
+      left: 3.36%;
+      top: 26.95%;
+      width: 93.28%;
+      height: 41.96%;
+      pointer-events: none;
+      display: grid;
+      grid-template-columns: repeat(8, 1fr);
+      grid-template-rows: repeat(8, 1fr);
+    }
+
+    .grid-cell {
+      position: relative;
+      border: 1px dashed rgba(255, 255, 255, 0.12);
+      transition: all 0.2s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .grid-cell.highlight-1 {
+      background: rgba(0, 242, 254, 0.55);
+      border: 2px solid var(--accent-cyan);
+      box-shadow: inset 0 0 12px rgba(0, 242, 254, 0.8), 0 0 10px rgba(0, 242, 254, 0.6);
+    }
+
+    .grid-cell.highlight-2 {
+      background: rgba(255, 183, 3, 0.55);
+      border: 2px solid var(--accent-gold);
+      box-shadow: inset 0 0 12px rgba(255, 183, 3, 0.8), 0 0 10px rgba(255, 183, 3, 0.6);
+    }
+
+    .grid-cell.highlight-3 {
+      background: rgba(247, 37, 133, 0.55);
+      border: 2px solid var(--accent-pink);
+      box-shadow: inset 0 0 12px rgba(247, 37, 133, 0.8), 0 0 10px rgba(247, 37, 133, 0.6);
+    }
+
+    .step-badge {
+      font-weight: 800;
+      font-size: 16px;
+      color: #fff;
+      text-shadow: 0 2px 4px rgba(0,0,0,0.8);
+      border-radius: 50%;
+      width: 26px;
+      height: 26px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.5);
+    }
+
+    .step-badge-1 { background: #0891b2; border: 2px solid #fff; }
+    .step-badge-2 { background: #d97706; border: 2px solid #fff; }
+    .step-badge-3 { background: #be185d; border: 2px solid #fff; }
+
+    /* Laser beam for clearing lines */
+    .row-clear-beam {
+      position: absolute;
+      left: 0;
+      right: 0;
+      height: 12.5%;
+      background: linear-gradient(90deg, rgba(16, 185, 129, 0) 0%, rgba(16, 185, 129, 0.7) 50%, rgba(16, 185, 129, 0) 100%);
+      box-shadow: 0 0 15px rgba(16, 185, 129, 0.9);
+      pointer-events: none;
+      z-index: 10;
+      animation: pulseBeam 1.2s infinite alternate;
+    }
+
+    .col-clear-beam {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      width: 12.5%;
+      background: linear-gradient(180deg, rgba(16, 185, 129, 0) 0%, rgba(16, 185, 129, 0.7) 50%, rgba(16, 185, 129, 0) 100%);
+      box-shadow: 0 0 15px rgba(16, 185, 129, 0.9);
+      pointer-events: none;
+      z-index: 10;
+      animation: pulseBeam 1.2s infinite alternate;
+    }
+
+    @keyframes pulseBeam {
+      from { opacity: 0.5; }
+      to { opacity: 0.95; }
+    }
+
+    /* RIGHT: Co-Pilot Panel */
+    .panel {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    /* Main CTA Button */
+    .btn-scan {
+      background: linear-gradient(135deg, #0ea5e9, #6366f1);
+      color: white;
+      border: none;
+      padding: 18px 28px;
+      border-radius: 16px;
+      font-size: 18px;
+      font-weight: 800;
+      letter-spacing: -0.2px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      box-shadow: 0 8px 24px rgba(14, 165, 233, 0.35);
+      transition: all 0.2s ease;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .btn-scan:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 12px 32px rgba(14, 165, 233, 0.5);
+    }
+
+    .btn-scan:active {
+      transform: translateY(1px);
+    }
+
+    .btn-scan.loading {
+      opacity: 0.8;
+      pointer-events: none;
+    }
+
+    .kbd-tag {
+      background: rgba(255, 255, 255, 0.2);
+      padding: 4px 8px;
+      border-radius: 6px;
+      font-size: 12px;
+      font-family: 'JetBrains Mono', monospace;
+      font-weight: 700;
+    }
+
+    /* Step Filter Tabs */
+    .filter-tabs {
+      display: flex;
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 12px;
+      padding: 4px;
+      gap: 4px;
+    }
+
+    .tab-btn {
+      flex: 1;
+      padding: 8px;
+      border: none;
+      background: transparent;
+      color: var(--text-muted);
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+
+    .tab-btn.active {
+      background: #1e293b;
+      color: #fff;
+    }
+
+    /* Step Cards */
+    .steps-container {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .step-card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 16px;
+      padding: 16px 20px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      transition: all 0.2s ease;
+      position: relative;
+    }
+
+    .step-card.active-step {
+      border-color: #38bdf8;
+      background: #162238;
+      box-shadow: 0 4px 16px rgba(56, 189, 248, 0.15);
+    }
+
+    .step-number-box {
+      width: 44px;
+      height: 44px;
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 20px;
+      font-weight: 800;
+      flex-shrink: 0;
+    }
+
+    .step-number-1 { background: rgba(0, 242, 254, 0.15); color: var(--accent-cyan); border: 2px solid var(--accent-cyan); }
+    .step-number-2 { background: rgba(255, 183, 3, 0.15); color: var(--accent-gold); border: 2px solid var(--accent-gold); }
+    .step-number-3 { background: rgba(247, 37, 133, 0.15); color: var(--accent-pink); border: 2px solid var(--accent-pink); }
+
+    .step-info {
+      flex: 1;
+    }
+
+    .step-info-header {
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--text-muted);
+      margin-bottom: 2px;
+    }
+
+    .step-title {
+      font-size: 16px;
+      font-weight: 700;
+      color: #fff;
+    }
+
+    .step-target {
+      font-size: 14px;
+      color: #cbd5e1;
+      margin-top: 2px;
+    }
+
+    .step-clear-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 12px;
+      font-weight: 700;
+      padding: 3px 8px;
+      border-radius: 6px;
+      background: rgba(16, 185, 129, 0.2);
+      color: var(--accent-green);
+      border: 1px solid rgba(16, 185, 129, 0.3);
+      margin-top: 6px;
+    }
+
+    /* Mini Piece Preview in Card */
+    .mini-shape-preview {
+      display: grid;
+      gap: 2px;
+      background: rgba(0,0,0,0.3);
+      padding: 6px;
+      border-radius: 8px;
+      border: 1px solid rgba(255,255,255,0.06);
+    }
+
+    .mini-block {
+      width: 10px;
+      height: 10px;
+      border-radius: 2px;
+    }
+
+    .mini-block.on-1 { background: var(--accent-cyan); }
+    .mini-block.on-2 { background: var(--accent-gold); }
+    .mini-block.on-3 { background: var(--accent-pink); }
+    .mini-block.off { background: transparent; }
+
+    /* Quick Action Buttons */
+    .quick-actions {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+
+    .btn-secondary {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      color: var(--text-main);
+      padding: 12px 16px;
+      border-radius: 12px;
+      font-weight: 600;
+      font-size: 14px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      transition: all 0.15s;
+    }
+
+    .btn-secondary:hover {
+      background: #1e293b;
+      border-color: #475569;
+    }
+
+    .spinner {
+      border: 3px solid rgba(255, 255, 255, 0.2);
+      border-top: 3px solid #fff;
+      border-radius: 50%;
+      width: 20px;
+      height: 20px;
+      animation: spin 0.7s linear infinite;
+      display: none;
+    }
+
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+
+    .btn-scan.loading .spinner { display: inline-block; }
+    .btn-scan.loading .scan-text { display: none; }
+
+    .auto-card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 16px;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .auto-card.live {
+      border-color: rgba(16, 185, 129, 0.55);
+      box-shadow: 0 0 0 1px rgba(16, 185, 129, 0.15);
+    }
+
+    .auto-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .btn-auto {
+      border: none;
+      border-radius: 12px;
+      padding: 12px 18px;
+      font-weight: 800;
+      font-size: 14px;
+      cursor: pointer;
+      color: white;
+      background: #334155;
+      min-width: 132px;
+    }
+
+    .btn-auto.on {
+      background: linear-gradient(135deg, #059669, #10b981);
+      box-shadow: 0 8px 20px rgba(16, 185, 129, 0.3);
+    }
+
+    .speed-tabs {
+      display: grid;
+      grid-template-columns: repeat(6, 1fr);
+      gap: 6px;
+    }
+
+    .speed-btn {
+      border: 1px solid var(--card-border);
+      background: #0f172a;
+      color: var(--text-muted);
+      border-radius: 10px;
+      padding: 10px 0;
+      font-weight: 800;
+      font-size: 13px;
+      cursor: pointer;
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    .speed-btn.active {
+      color: #041016;
+      background: var(--accent-cyan);
+      border-color: var(--accent-cyan);
+    }
+
+    .auto-status {
+      font-size: 13px;
+      color: var(--text-muted);
+      line-height: 1.45;
+    }
+
+    .auto-status b {
+      color: var(--text-main);
+    }
+
+    .boost-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .boost-toggle {
+      border: 1px solid var(--card-border);
+      background: #0f172a;
+      color: var(--text-muted);
+      border-radius: 10px;
+      padding: 8px 12px;
+      font-weight: 800;
+      font-size: 12px;
+      cursor: pointer;
+    }
+
+    .boost-toggle.on {
+      color: #041016;
+      background: var(--accent-gold);
+      border-color: var(--accent-gold);
+    }
+
+    .boost-counts {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="brand">
+      <div class="logo-badge">BLOCKZI AI</div>
+      <h1>Co-Pilot Assistant</h1>
+    </div>
+    <div class="status-group">
+      <div id="conn-badge" class="badge disconnected">
+        <span class="badge-dot"></span>
+        <span id="conn-text">Memeriksa HP...</span>
+      </div>
+      <div class="badge" id="level-badge">Level --</div>
+      <div class="badge" id="auto-badge">Manual</div>
+      <div class="badge">
+        <span>Respon:</span>
+        <span id="time-badge" class="badge-time">-- ms</span>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <!-- LEFT COLUMN: Live Phone View with Overlays -->
+    <div>
+      <div class="screen-container">
+        <img id="game-img" src="" alt="Tangkapan Layar Permainan">
+        
+        <!-- Interactive 8x8 Board Overlay -->
+        <div id="board-overlay" class="board-overlay">
+          <!-- 64 cells generated by JS -->
+        </div>
+
+        <!-- Laser Clears Overlay -->
+        <div id="lasers-container" style="position: absolute; left: 3.36%; top: 26.95%; width: 93.28%; height: 41.96%; pointer-events: none;"></div>
+      </div>
+    </div>
+
+    <!-- RIGHT COLUMN: Action & Step Directions -->
+    <div class="panel">
+      <div class="auto-card" id="auto-card">
+        <div class="auto-head">
+          <div>
+            <div class="step-info-header">Mode Auto</div>
+            <div class="step-title" id="auto-title">Manual</div>
+          </div>
+          <button id="btn-auto" class="btn-auto" type="button">Mulai Auto</button>
+        </div>
+        <div class="speed-tabs" id="speed-tabs">
+          <button class="speed-btn" type="button" data-speed="min">MIN</button>
+          <button class="speed-btn" type="button" data-speed="max">MAX</button>
+          <button class="speed-btn active" type="button" data-speed="adaptive">ADAPTIVE</button>
+        </div>
+        <div class="boost-row">
+          <button id="btn-boost" class="boost-toggle on" type="button">Booster</button>
+          <button id="btn-revive" class="boost-toggle on" type="button">Revive</button>
+          <span class="boost-counts" id="boost-counts">+1 — · Bom — · X —</span>
+        </div>
+        <div class="auto-status" id="auto-status">Kalah → tap Revive, scroll iklan 33 detik, lalu lanjut di papan yang sama.</div>
+      </div>
+
+      <!-- Big Scan Trigger Button -->
+      <button id="btn-scan" class="btn-scan" onclick="fetchSolution()">
+        <span class="spinner"></span>
+        <span class="scan-text">📸 SCAN & SELESAIKAN</span>
+        <span class="kbd-tag">SPASI</span>
+      </button>
+
+      <!-- Step Filter Tabs -->
+      <div class="filter-tabs">
+        <button class="tab-btn active" onclick="setStepFilter('all')">Semua Langkah</button>
+        <button class="tab-btn" onclick="setStepFilter(1)">Langkah ①</button>
+        <button class="tab-btn" onclick="setStepFilter(2)">Langkah ②</button>
+        <button class="tab-btn" onclick="setStepFilter(3)">Langkah ③</button>
+      </div>
+
+      <!-- Step Cards Container -->
+      <div id="steps-list" class="steps-container">
+        <div style="text-align: center; color: var(--text-muted); padding: 40px 20px;">
+          Tekan tombol <b>SCAN (atau Spasi)</b> untuk menganalisis balok dan mencari solusi terbaik.
+        </div>
+      </div>
+
+      <!-- Quick Action Controls -->
+      <div class="quick-actions">
+        <button class="btn-secondary" onclick="sendAction('retry')">
+          <span>🔄</span> Main Lagi <span class="kbd-tag">R</span>
+        </button>
+        <button class="btn-secondary" onclick="sendAction('next')">
+          <span>⏩</span> Level Lanjut <span class="kbd-tag">N</span>
+        </button>
+      </div>
+
+      <!-- Quick Helper Tips -->
+      <div style="background: rgba(255,255,255,0.03); border: 1px dashed rgba(255,255,255,0.1); border-radius: 12px; padding: 14px 18px; font-size: 13px; color: var(--text-muted); line-height: 1.5;">
+        💡 <b>Tips Penggunaan:</b><br>
+        1. <b>Mulai Auto</b> untuk main sendiri sampai Level 90.<br>
+        2. Pilih kecepatan <b>MIN</b> (akurat), <b>MAX</b> (kilat), atau <b>ADAPTIVE</b> (otomatis sesuai kondisi).<br>
+        3. Mode manual tetap ada: <b>SPASI</b> untuk scan, lalu taruh ① ➔ ② ➔ ③.
+      </div>
+    </div>
+  </main>
+
+  <script>
+    let currentSolution = null;
+    let activeFilter = 'all';
+    let autoMode = false;
+    let currentSpeed = '1';
+    let useBoosters = true;
+    let useRevive = true;
+    let pollTimer = null;
+
+    // Build 8x8 Grid overlay
+    const overlay = document.getElementById('board-overlay');
+    for (let r = 0; r < 8; r++) {
+      for (let c = 0; c < 8; c++) {
+        const cell = document.createElement('div');
+        cell.className = 'grid-cell';
+        cell.id = `cell-${r}-${c}`;
+        overlay.appendChild(cell);
+      }
+    }
+
+    function playChime() {
+      try {
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.frequency.setValueAtTime(587.33, ctx.currentTime); // D5
+        osc.frequency.exponentialRampToValueAtTime(880, ctx.currentTime + 0.1); // A5
+        gain.gain.setValueAtTime(0.15, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.25);
+        osc.start();
+        osc.stop(ctx.currentTime + 0.25);
+      } catch (e) {}
+    }
+
+    async function fetchSolution() {
+      const btn = document.getElementById('btn-scan');
+      btn.classList.add('loading');
+
+      try {
+        const res = await fetch('/api/solve');
+        const data = await res.json();
+
+        // Update connection status
+        const connBadge = document.getElementById('conn-badge');
+        const connText = document.getElementById('conn-text');
+        if (data.device_connected) {
+          connBadge.className = 'badge connected';
+          connText.textContent = '🟢 HP Terhubung';
+        } else {
+          connBadge.className = 'badge disconnected';
+          connText.textContent = '🟡 Mode Layar Cache';
+        }
+
+        // Update latency
+        document.getElementById('time-badge').textContent = `${data.total_time_ms} ms`;
+        if (data.level) {
+          document.getElementById('level-badge').textContent = `Level ${data.level}`;
+        }
+
+        // Update image
+        if (data.image_b64) {
+          document.getElementById('game-img').src = data.image_b64;
+        }
+
+        currentSolution = data;
+        renderSolution(data);
+        playChime();
+      } catch (err) {
+        console.error("Error fetching solution:", err);
+      } finally {
+        btn.classList.remove('loading');
+      }
+    }
+
+    function renderSolution(data) {
+      // Clear previous cell highlights
+      for (let r = 0; r < 8; r++) {
+        for (let c = 0; c < 8; c++) {
+          const el = document.getElementById(`cell-${r}-${c}`);
+          el.className = 'grid-cell';
+          el.innerHTML = '';
+        }
+      }
+
+      const lasersContainer = document.getElementById('lasers-container');
+      lasersContainer.innerHTML = '';
+
+      const stepsList = document.getElementById('steps-list');
+      stepsList.innerHTML = '';
+
+      if (data.game_state === 'VICTORY') {
+        stepsList.innerHTML = `
+          <div style="background: rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.35); border-radius: 12px; padding: 18px; color: #6ee7b7; text-align: center;">
+            Level selesai. Auto menekan lanjut.
+          </div>`;
+        return;
+      }
+      if (data.game_state === 'DEFEAT') {
+        stepsList.innerHTML = `
+          <div style="background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 12px; padding: 18px; color: #fca5a5; text-align: center;">
+            Kalah. Auto menekan Main Lagi.
+          </div>`;
+        return;
+      }
+
+      if (!data.sequence || data.sequence.length === 0) {
+        stepsList.innerHTML = `
+          <div style="background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 12px; padding: 18px; color: #fca5a5; text-align: center;">
+            ⚠️ Tidak ada gerakan balok yang cocok atau papan penuh.
+          </div>
+        `;
+        return;
+      }
+
+      // Render Step Cards & Overlay
+      data.sequence.forEach((step, idx) => {
+        const stepNum = step.step;
+        const isVisible = (activeFilter === 'all' || activeFilter === stepNum);
+
+        // Highlight cells on board if visible
+        if (isVisible) {
+          step.cells.forEach(([r, c], cIdx) => {
+            const cell = document.getElementById(`cell-${r}-${c}`);
+            if (cell) {
+              cell.classList.add(`highlight-${stepNum}`);
+              // Add badge in the first or middle cell
+              if (cIdx === 0) {
+                const badge = document.createElement('div');
+                badge.className = `step-badge step-badge-${stepNum}`;
+                badge.textContent = stepNum;
+                cell.appendChild(badge);
+              }
+            }
+          });
+
+          // Add Laser Clears
+          (step.full_rows || []).forEach(r => {
+            const beam = document.createElement('div');
+            beam.className = 'row-clear-beam';
+            beam.style.top = `${r * 12.5}%`;
+            lasersContainer.appendChild(beam);
+          });
+
+          (step.full_cols || []).forEach(c => {
+            const beam = document.createElement('div');
+            beam.className = 'col-clear-beam';
+            beam.style.left = `${c * 12.5}%`;
+            lasersContainer.appendChild(beam);
+          });
+        }
+
+        // Build Mini Shape Preview HTML
+        let miniGridHtml = '';
+        if (step.shape) {
+          const rows = step.shape.length;
+          const cols = step.shape[0].length;
+          miniGridHtml = `<div class="mini-shape-preview" style="grid-template-columns: repeat(${cols}, 1fr);">`;
+          for (let r = 0; r < rows; r++) {
+            for (let c = 0; c < cols; c++) {
+              const on = step.shape[r][c] === 1;
+              miniGridHtml += `<div class="mini-block ${on ? `on-${stepNum}` : 'off'}"></div>`;
+            }
+          }
+          miniGridHtml += `</div>`;
+        }
+
+        // Build Step Card
+        const card = document.createElement('div');
+        card.className = `step-card ${isVisible ? 'active-step' : ''}`;
+        card.innerHTML = `
+          <div class="step-number-box step-number-${stepNum}">${stepNum}</div>
+          <div class="step-info">
+            <div class="step-info-header">Langkah ${stepNum} (Jalan ke-${stepNum})</div>
+            <div class="step-title">Ambil: <b>${step.slot_name}</b></div>
+            <div class="step-target">Taruh di: <b>Baris ${step.r + 1}, Kolom ${step.c + 1}</b></div>
+            ${step.clears > 0 ? `<div class="step-clear-badge">✨ Pecah ${step.clears} Garis!</div>` : ''}
+          </div>
+          ${miniGridHtml}
+        `;
+        stepsList.appendChild(card);
+      });
+    }
+
+    function setStepFilter(filter) {
+      activeFilter = filter;
+      document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.classList.remove('active');
+      });
+      event.target.classList.add('active');
+      if (currentSolution) {
+        renderSolution(currentSolution);
+      }
+    }
+
+    async function sendAction(act) {
+      try {
+        await fetch('/api/action', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({action: act})
+        });
+        setTimeout(fetchSolution, 600);
+      } catch (err) {
+        console.error("Action error:", err);
+      }
+    }
+
+    // Keyboard Shortcuts
+    window.addEventListener('keydown', (e) => {
+      // Space: Scan & Solve
+      if (e.code === 'Space') {
+        e.preventDefault();
+        fetchSolution();
+      }
+      // R: Retry
+      else if (e.key === 'r' || e.key === 'R') {
+        sendAction('retry');
+      }
+      // N: Next
+      else if (e.key === 'n' || e.key === 'N') {
+        sendAction('next');
+      }
+      // 1, 2, 3: Filter step
+      else if (e.key === '1') { setStepFilter(1); }
+      else if (e.key === '2') { setStepFilter(2); }
+      else if (e.key === '3') { setStepFilter(3); }
+      else if (e.key === '0' || e.key === '`') { setStepFilter('all'); }
+    });
+
+    function applyAutoStatus(data) {
+      autoMode = !!data.enabled;
+      currentSpeed = data.speed || currentSpeed;
+      const card = document.getElementById('auto-card');
+      const btn = document.getElementById('btn-auto');
+      const title = document.getElementById('auto-title');
+      const badge = document.getElementById('auto-badge');
+      const scan = document.getElementById('btn-scan');
+      card.classList.toggle('live', autoMode);
+      btn.classList.toggle('on', autoMode);
+      btn.textContent = autoMode ? 'Stop Auto' : 'Mulai Auto';
+      const speedLabel = currentSpeed === 'max' ? 'MAX' : currentSpeed === 'min' ? 'MIN' : currentSpeed === 'adaptive' ? 'ADAPTIVE' : currentSpeed;
+      title.textContent = autoMode ? `Auto ${speedLabel}` : 'Manual';
+      badge.textContent = autoMode ? `Auto ${speedLabel}` : 'Manual';
+      scan.style.opacity = autoMode ? '0.45' : '';
+      scan.style.pointerEvents = autoMode ? 'none' : '';
+      document.querySelectorAll('.speed-btn').forEach(el => {
+        el.classList.toggle('active', el.dataset.speed === currentSpeed);
+      });
+      const level = data.level || (data.solution && data.solution.level);
+      document.getElementById('level-badge').textContent = level ? `Level ${level}` : 'Level --';
+      if (typeof data.boosters === 'boolean') {
+        useBoosters = data.boosters;
+      }
+      const boostBtn = document.getElementById('btn-boost');
+      boostBtn.classList.toggle('on', useBoosters);
+      boostBtn.textContent = useBoosters ? 'Booster' : 'Booster off';
+      if (typeof data.revive === 'boolean') {
+        useRevive = data.revive;
+      }
+      const reviveBtn = document.getElementById('btn-revive');
+      reviveBtn.classList.toggle('on', useRevive);
+      reviveBtn.textContent = useRevive ? 'Revive' : 'Revive off';
+      const stock = data.boost_counts || {};
+      const n = (v) => (v === 0 || v) ? v : '—';
+      document.getElementById('boost-counts').textContent =
+        `+1 ${n(stock.extra)} · Bom ${n(stock.bomb)} · X ${n(stock.remove)}`;
+      const ok = data.ok || 0;
+      const fail = data.fail || 0;
+      const msg = data.message || '';
+      document.getElementById('auto-status').innerHTML =
+        `<b>${ok} masuk</b> / ${fail} gagal` + (msg ? ` · ${msg}` : '');
+      if (data.solution) {
+        if (data.solution.device_connected) {
+          document.getElementById('conn-badge').className = 'badge connected';
+          document.getElementById('conn-text').textContent = '🟢 HP Terhubung';
+        }
+        if (data.solution.total_time_ms != null) {
+          document.getElementById('time-badge').textContent = `${data.solution.total_time_ms} ms`;
+        }
+        if (data.solution.image_b64) {
+          document.getElementById('game-img').src = data.solution.image_b64;
+        }
+        currentSolution = data.solution;
+        renderSolution(data.solution);
+      }
+    }
+
+    async function refreshAuto() {
+      try {
+        const res = await fetch('/api/auto');
+        applyAutoStatus(await res.json());
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
+    async function setAuto(enabled, speed) {
+      await fetch('/api/auto', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({enabled, speed, boosters: useBoosters, revive: useRevive})
+      });
+      await refreshAuto();
+    }
+
+    document.getElementById('btn-auto').addEventListener('click', () => {
+      setAuto(!autoMode, currentSpeed);
+    });
+    document.getElementById('btn-boost').addEventListener('click', () => {
+      useBoosters = !useBoosters;
+      setAuto(autoMode, currentSpeed);
+    });
+    document.getElementById('btn-revive').addEventListener('click', () => {
+      useRevive = !useRevive;
+      setAuto(autoMode, currentSpeed);
+    });
+    document.getElementById('speed-tabs').addEventListener('click', (e) => {
+      const btn = e.target.closest('.speed-btn');
+      if (!btn) return;
+      currentSpeed = btn.dataset.speed;
+      setAuto(autoMode, currentSpeed);
+    });
+
+    pollTimer = setInterval(() => {
+      if (autoMode) refreshAuto();
+    }, 800);
+
+    // Initial check on load
+    refreshAuto().then(() => {
+      if (!autoMode) fetchSolution();
+    });
+  </script>
+</body>
+</html>
