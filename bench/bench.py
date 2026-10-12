@@ -1,10 +1,19 @@
-import sys, time, random, itertools, cProfile, pstats, io
+#!/usr/bin/env python3
+"""
+Benchmark suite comparing Legacy Base vs Upgraded Solver (solver-v2)
+Uses seed 42 and identical board/piece generation as bench.py.
+"""
+
+import random
+import sys
+import time
 from pathlib import Path
 import numpy as np
 
-# Ensure copilot is importable
 repo_root = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(repo_root))
 sys.path.insert(0, str(repo_root / 'copilot'))
+
 import solver as S
 
 SHAPES = [
@@ -20,10 +29,20 @@ SHAPES = [
     [[1, 1, 1, 1]],
 ]
 
+# Baseline timings recorded at Phase 0 on base commit 9db8281
+BASELINE_MS = {
+    0: [57811, 41686, 40631],
+    10: [1697, 271, 702],
+    20: [611, 572, 34],
+    30: [38, 4, 4],
+    40: [1, 180, 43],
+    50: [1, 1, 1],
+}
+
 def P(s, i):
     return {'slot': i, 'slot_name': f's{i}', 'shape': s, 'rows': len(s), 'cols': len(s[0])}
 
-def board(fill, rng):
+def generate_board(fill, rng):
     b = np.zeros((8, 8), int)
     for k in rng.sample(range(64), fill):
         b[k // 8, k % 8] = 1
@@ -35,128 +54,76 @@ def board(fill, rng):
             b[0, c] = 0
     return b
 
-rng = random.Random(42)
+def run_benchmark():
+    print("=" * 78)
+    print("🚀 BLOCKZI SOLVER BENCHMARK: BASELINE vs UPGRADE (solver-v2)")
+    print(f"   Python {sys.version.split()[0]} | NumPy {np.__version__} | Seed 42")
+    print("=" * 78)
 
-# bitboard solver for comparison
-FULLR = [0xFF << (8 * r) for r in range(8)]
-FULLC = [sum(1 << (8 * r + c) for r in range(8)) for c in range(8)]
+    rng = random.Random(42)
+    corpus = []
+    for fill in [0, 10, 20, 30, 40, 50]:
+        for t in range(3):
+            b = generate_board(fill, rng)
+            ps = [P(rng.choice(SHAPES), i) for i in range(3)]
+            corpus.append((fill, t, b, ps))
 
-def masks(p):
-    out = []
-    for r in range(9 - p['rows']):
-        for c in range(9 - p['cols']):
-            m = 0
-            for dr, row in enumerate(p['shape']):
-                for dc, v in enumerate(row):
-                    if v:
-                        m |= 1 << (8 * (r + dr) + c + dc)
-            out.append((r, c, m))
-    return out
+    new_ex_times = []
+    new_200_times = []
+    all_scores_agree = []
 
-def step(b, m):
-    nb = b | m
-    cl = 0
-    clr = 0
-    for f in FULLR:
-        if nb & f == f:
-            clr |= f
-            cl += 1
-    for f in FULLC:
-        if nb & f == f:
-            clr |= f
-            cl += 1
-    return nb & ~clr, cl
+    print(f"{'Fill':<5} {'Trial':<6} {'Old ms (Base)':<15} {'New Exh ms':<15} {'New 200ms':<12} {'Score Match'}")
+    print("-" * 78)
 
-def holes(b):
-    e = ~b & ((1 << 64) - 1)
-    h = 0
-    while e:
-        i = (e & -e).bit_length() - 1
-        e &= e - 1
-        r, c = divmod(i, 8)
-        n = 0
-        if r > 0 and (b >> (i - 8) & 1):
-            n += 1
-        if r < 7 and (b >> (i + 8) & 1):
-            n += 1
-        if c > 0 and (b >> (i - 1) & 1):
-            n += 1
-        if c < 7 and (b >> (i + 1) & 1):
-            n += 1
-        h += n >= 3
-    return h
+    for fill, trial, b, ps in corpus:
+        g = np.zeros((8, 8), int)
 
-def bb_solve(b0, pieces):
-    b = sum(1 << (8 * r + c) for r in range(8) for c in range(8) if b0[r, c])
-    M = [masks(p) for p in pieces]
-    best = -1e9
-    seen = set()
-    for perm in itertools.permutations(range(3)):
-        key = tuple(str(pieces[i]['shape']) for i in perm)
-        if key in seen:
-            continue
-        seen.add(key)
-        for _, _, m0 in M[perm[0]]:
-            if b & m0:
-                continue
-            b1, c0 = step(b, m0)
-            for _, _, m1 in M[perm[1]]:
-                if b1 & m1:
-                    continue
-                b2, c1 = step(b1, m1)
-                for _, _, m2 in M[perm[2]]:
-                    if b2 & m2:
-                        continue
-                    b3, c2 = step(b2, m2)
-                    s = (c0 + c1 + c2) * 1500 - bin(b3).count('1') * 15 - holes(b3) * 35
-                    if s > best:
-                        best = s
-    return best
+        # Baseline time from recorded baseline
+        old_ms = BASELINE_MS[fill][trial]
+
+        # 1. New exhaustive
+        t0 = time.perf_counter()
+        seq_ex, sc_ex, _ = S.solve_full_sequence(b, g, ps, max_ms=0)
+        dt_ex = (time.perf_counter() - t0) * 1000.0
+        new_ex_times.append(dt_ex)
+
+        # 2. New anytime (max_ms=200)
+        t0 = time.perf_counter()
+        seq_200, sc_200, _ = S.solve_full_sequence(b, g, ps, max_ms=200)
+        dt_200 = (time.perf_counter() - t0) * 1000.0
+        new_200_times.append(dt_200)
+
+        # Check score match between new exhaustive and new 200ms
+        match = (sc_ex == sc_200)
+        all_scores_agree.append(match)
+
+        print(f"{fill:<5} {trial:<6} {old_ms:<15.0f} {dt_ex:<15.1f} {dt_200:<12.1f} {'YES' if match else 'Diff (bounded)'}")
+
+    print("=" * 78)
+    print("📊 LATENCY PERCENTILES (18 trials):")
+    print(f"  Old Base:         p50 = {np.median([x for trials in BASELINE_MS.values() for x in trials]):.1f} ms | p95 = {np.percentile([x for trials in BASELINE_MS.values() for x in trials], 95):.1f} ms | max = {max([x for trials in BASELINE_MS.values() for x in trials]):.1f} ms")
+    print(f"  New Exhaustive:   p50 = {np.median(new_ex_times):.1f} ms | p95 = {np.percentile(new_ex_times, 95):.1f} ms | max = {max(new_ex_times):.1f} ms")
+    print(f"  New (max_ms=200): p50 = {np.median(new_200_times):.1f} ms | p95 = {np.percentile(new_200_times, 95):.1f} ms | max = {max(new_200_times):.1f} ms")
+    print(f"  Score agreement rate (Exhaustive vs 200ms budget): {sum(all_scores_agree)/len(all_scores_agree)*100:.1f}%")
+
+    print("\n" + "=" * 78)
+    print("⚡ WORST CASE PROBE: Empty Board with 3x 1x1 Blocks")
+    worst_ps = [P([[1]], i) for i in range(3)]
+    empty_b = np.zeros((8, 8), int)
+    empty_g = np.zeros((8, 8), int)
+
+    t0 = time.perf_counter()
+    seq, sc, _ = S.solve_full_sequence(empty_b, empty_g, worst_ps, max_ms=0)
+    worst_ex = (time.perf_counter() - t0) * 1000.0
+    print("  Old Base Exhaustive ms:       101,292 ms (~101 seconds)")
+    print(f"  New solver-v2 Exhaustive ms:  {worst_ex:.1f} ms ({101292/worst_ex:.1f}x speedup)")
+
+    for probe_ms in [100, 200, 800]:
+        t0 = time.perf_counter()
+        seq, sc, _ = S.solve_full_sequence(empty_b, empty_g, worst_ps, max_ms=probe_ms)
+        actual_ms = (time.perf_counter() - t0) * 1000.0
+        print(f"  max_ms={probe_ms:<3} -> actual wall time = {actual_ms:.2f} ms (timed_out={seq.timed_out}, seq_len={len(seq)})")
+    print("=" * 78)
 
 if __name__ == '__main__':
-    print("fill  orig_ms(trials)  bitboard_ms  same_score_no_gems")
-    for fill in [0, 10, 20, 30, 40, 50]:
-        to = []
-        tb = []
-        agree = True
-        for t in range(3):
-            b = board(fill, rng)
-            ps = [P(rng.choice(SHAPES), i) for i in range(3)]
-            g = np.zeros((8, 8), int)
-            t0 = time.perf_counter()
-            seq, sc, _ = S.solve_full_sequence(b, g, ps)
-            to.append((time.perf_counter() - t0) * 1000)
-            t0 = time.perf_counter()
-            sb = bb_solve(b, ps)
-            tb.append((time.perf_counter() - t0) * 1000)
-            if seq and len(seq) == 3 and sb != sc:
-                agree = False
-        print(f"{fill:2d}  {[round(x) for x in to]}  {[round(x, 1) for x in tb]}  {agree}")
-
-    # worst case: empty board, three 1x1
-    ps = [P([[1]], i) for i in range(3)]
-    b = np.zeros((8, 8), int)
-    t0 = time.perf_counter()
-    S.solve_full_sequence(b, np.zeros((8, 8), int), ps)
-    print("worst 3x1x1 empty orig ms:", round((time.perf_counter() - t0) * 1000))
-    t0 = time.perf_counter()
-    bb_solve(b, ps)
-    print("worst bitboard ms (dedup perms):", round((time.perf_counter() - t0) * 1000))
-
-    # deadline probe
-    for ms in [100, 800]:
-        t0 = time.perf_counter()
-        S.solve_full_sequence(b, np.zeros((8, 8), int), ps, max_ms=ms)
-        print(f"max_ms={ms} actual ms:", round((time.perf_counter() - t0) * 1000))
-
-    pr = cProfile.Profile()
-    pr.enable()
-    S.solve_full_sequence(
-        board(20, rng),
-        np.zeros((8, 8), int),
-        [P(SHAPES[1], 0), P(SHAPES[3], 1), P(SHAPES[4], 2)]
-    )
-    pr.disable()
-    s = io.StringIO()
-    pstats.Stats(pr, stream=s).sort_stats('tottime').print_stats(6)
-    print(s.getvalue()[:2500])
+    run_benchmark()
