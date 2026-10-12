@@ -38,7 +38,6 @@ def make_board(fill, rng):
 
 def make_gems(b, count, rng):
     g = np.zeros((8, 8), int)
-    # Gems are placed on filled cells
     filled_indices = [k for k in range(64) if b[k // 8, k % 8] == 1]
     if filled_indices and count > 0:
         sample_count = min(count, len(filled_indices))
@@ -46,32 +45,35 @@ def make_gems(b, count, rng):
             g[k // 8, k % 8] = 1
     return g
 
+def to_builtin(obj):
+    if isinstance(obj, (np.integer, np.int64, np.int32)):
+        return int(obj)
+    if isinstance(obj, (np.floating, np.float64, np.float32)):
+        return float(obj)
+    if isinstance(obj, np.ndarray):
+        return obj.tolist()
+    if isinstance(obj, list):
+        return [to_builtin(x) for x in obj]
+    if isinstance(obj, dict):
+        return {k: to_builtin(v) for k, v in obj.items()}
+    return obj
+
 def main():
     rng = random.Random(42)
     cases = []
     case_id = 0
 
-    # 1. Fill levels 10, 20, 30, 40, 50 (fast) - 2 trials each
+    # 1. Fill levels 10, 20, 30, 40, 50 - 2 trials each where 3 pieces fit
     for fill in [10, 20, 30, 40, 50]:
         for trial in range(2):
+            while True:
+                b = make_board(fill, rng)
+                g = np.zeros((8, 8), int)
+                ps = [P(rng.choice(SHAPES), i) for i in range(3)]
+                seq, score, ms = legacy.solve_full_sequence(b, g, ps)
+                if len(seq) == 3:
+                    break
             case_id += 1
-            b = make_board(fill, rng)
-            g = np.zeros((8, 8), int)
-            ps = [P(rng.choice(SHAPES), i) for i in range(3)]
-            seq, score, ms = legacy.solve_full_sequence(b, g, ps)
-            def to_builtin(obj):
-                if isinstance(obj, (np.integer, np.int64, np.int32)):
-                    return int(obj)
-                if isinstance(obj, (np.floating, np.float64, np.float32)):
-                    return float(obj)
-                if isinstance(obj, np.ndarray):
-                    return obj.tolist()
-                if isinstance(obj, list):
-                    return [to_builtin(x) for x in obj]
-                if isinstance(obj, dict):
-                    return {k: to_builtin(v) for k, v in obj.items()}
-                return obj
-
             cases.append({
                 'id': f'fill_{fill}_trial_{trial}',
                 'fill': fill,
@@ -84,14 +86,17 @@ def main():
             })
             print(f"Generated case {case_id}: fill {fill} trial {trial} -> score {score}, seq_len {len(seq)}")
 
-    # 2. Variants with gems (fill 20, 30, 40 with gems)
+    # 2. Variants with gems (fill 20, 30, 40 with gems) where 3 pieces fit
     for fill in [20, 30, 40]:
         for gem_count in [3, 6]:
+            while True:
+                b = make_board(fill, rng)
+                g = make_gems(b, gem_count, rng)
+                ps = [P(rng.choice(SHAPES), i) for i in range(3)]
+                seq, score, ms = legacy.solve_full_sequence(b, g, ps)
+                if len(seq) == 3:
+                    break
             case_id += 1
-            b = make_board(fill, rng)
-            g = make_gems(b, gem_count, rng)
-            ps = [P(rng.choice(SHAPES), i) for i in range(3)]
-            seq, score, ms = legacy.solve_full_sequence(b, g, ps)
             cases.append({
                 'id': f'gem_fill_{fill}_gems_{gem_count}',
                 'fill': fill,
@@ -104,11 +109,10 @@ def main():
             })
             print(f"Generated case {case_id}: fill {fill} gems {gem_count} -> score {score}, seq_len {len(seq)}")
 
-    # 3. One fill 0 trial with non-tiny pieces so it doesn't take 100 seconds
+    # 3. Empty board trial
     case_id += 1
     b = np.zeros((8, 8), int)
     g = np.zeros((8, 8), int)
-    # Use larger shapes: 3x3, 2x2, 1x5
     ps = [P(SHAPES[5], 0), P(SHAPES[4], 1), P(SHAPES[6], 2)]
     seq, score, ms = legacy.solve_full_sequence(b, g, ps)
     cases.append({

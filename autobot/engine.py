@@ -39,6 +39,7 @@ from solver import (  # noqa: E402
     solve_full_sequence,
     check_game_state,
     simulate_step,
+    count_isolated_holes,
 )
 
 X0, Y0 = 41, 731
@@ -327,7 +328,7 @@ def choose_move(board, gems, pieces, failed, max_ms=0):
                 nb, ng, clears, fr, fc, gems_got, cells = simulate_step(board, gems, p, r, c)
                 if nb is None:
                     continue
-                sc = clears * 1500 + gems_got * 400 - int(nb.sum()) * 15
+                sc = clears * 1500 + gems_got * 400 - int(nb.sum()) * 15 - count_isolated_holes(nb) * 35
                 if sc > best_score:
                     best_score = sc
                     best = {
@@ -1231,7 +1232,7 @@ class Pilot:
         elif speed_name == "max":
             solver_budget = 800
         else:
-            solver_budget = 0
+            solver_budget = max(2000, cfg.SOLVER_MAX_MS)
         step, seq, score, solve_ms = choose_move(board, gems, pieces, self.failed, max_ms=solver_budget)
         base["sequence"] = seq
         base["best_score"] = score
@@ -1327,7 +1328,7 @@ class Pilot:
                 "event": event,
             })
         else:
-            seq2, score2, solve_ms2 = solve_full_sequence(board_after, gems_after, pieces_after)
+            seq2, score2, solve_ms2 = solve_full_sequence(board_after, gems_after, pieces_after, max_ms=cfg.SOLVER_MAX_MS)
             base.update({
                 "image": after_im,
                 "game_state": check_game_state(after, fw, fh),
