@@ -7,7 +7,6 @@ Analyzes board, detects dock pieces adaptively, and computes optimal 3-step sequ
 import itertools
 import time
 import numpy as np
-from PIL import Image
 
 # Geometry for Xiaomi 1220x2712
 X0, Y0 = 41, 731

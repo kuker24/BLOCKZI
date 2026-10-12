@@ -5,32 +5,67 @@ Flask backend serving the interactive visual assistant.
 """
 
 import base64
+import hmac
 import io
 import os
 import subprocess
 import sys
 import threading
 import time
+import urllib.parse
+from pathlib import Path
 from flask import Flask, jsonify, render_template, request
 from PIL import Image
 import numpy as np
 
-from solver import analyze_board, detect_dock_pieces, solve_full_sequence, check_game_state
+# Add repo root and autobot to sys.path
+_repo_root = Path(__file__).resolve().parent.parent
+if str(_repo_root) not in sys.path:
+    sys.path.insert(0, str(_repo_root))
+if str(_repo_root / "autobot") not in sys.path:
+    sys.path.insert(0, str(_repo_root / "autobot"))
 
-sys.path.append(os.path.join(os.path.dirname(__file__), "..", "autobot"))
+import blockzi_config as cfg
+from solver import analyze_board, detect_dock_pieces, solve_full_sequence, check_game_state
 from engine import Pilot, SPEEDS, read_level  # noqa: E402
 
 app = Flask(__name__, template_folder='templates', static_folder='static')
 
-FALLBACK_IMAGE = '/tmp/antigravity/current_screen.png'
-if not os.path.exists(FALLBACK_IMAGE):
-    FALLBACK_IMAGE = '/tmp/antigravity/after_s1_stair.png'
+FALLBACK_IMAGE = str(cfg.SCREEN_DIR / 'current_screen.png')
+
+
+def check_auth():
+    """Verify BLOCKZI_TOKEN if configured via Authorization or X-Blockzi-Token header."""
+    if not cfg.TOKEN:
+        return True
+    token = ""
+    auth_header = request.headers.get("Authorization", "")
+    if auth_header.startswith("Bearer "):
+        token = auth_header[7:].strip()
+    elif "X-Blockzi-Token" in request.headers:
+        token = request.headers.get("X-Blockzi-Token", "").strip()
+    return hmac.compare_digest(token, cfg.TOKEN)
+
+
+def check_csrf():
+    """Ensure Origin / Referer matches host if present on state-mutating requests."""
+    origin = request.headers.get("Origin")
+    if origin:
+        parsed = urllib.parse.urlparse(origin)
+        if parsed.netloc and parsed.netloc != request.host:
+            return False
+    referer = request.headers.get("Referer")
+    if referer and not origin:
+        parsed = urllib.parse.urlparse(referer)
+        if parsed.netloc and parsed.netloc != request.host:
+            return False
+    return True
+
 
 def is_device_connected():
     try:
         res = subprocess.run(['adb', 'devices'], stdout=subprocess.PIPE, text=True, timeout=2)
         lines = [line.strip() for line in res.stdout.splitlines() if line.strip()]
-        # Check if any line has 'device' after header
         for l in lines[1:]:
             parts = l.split()
             if len(parts) >= 2 and parts[1] == 'device':
@@ -39,24 +74,31 @@ def is_device_connected():
     except Exception:
         return False
 
+
 def capture_screenshot():
+    latest_path = str(cfg.SCREEN_DIR / 'latest_copilot_screen.png')
     if is_device_connected():
         try:
             res = subprocess.run(['adb', 'exec-out', 'screencap', '-p'], stdout=subprocess.PIPE, timeout=4)
             if len(res.stdout) > 10000:
                 im = Image.open(io.BytesIO(res.stdout))
-                im.save('/tmp/antigravity/latest_copilot_screen.png')
+                im.save(latest_path)
                 return im, True
         except Exception:
             pass
-    # Fallback to latest available screenshot
-    for p in ['/tmp/antigravity/latest_copilot_screen.png', '/tmp/antigravity/current_screen.png', '/tmp/antigravity/current_check.png', '/tmp/antigravity/after_s1_stair.png']:
+
+    # Fallback to existing screen files
+    for p in [latest_path, FALLBACK_IMAGE, str(cfg.SCREEN_DIR / 'current_check.png')]:
         if os.path.exists(p):
             try:
                 return Image.open(p), False
             except Exception:
                 pass
-    raise RuntimeError("No screenshot available")
+
+    # Offline/test fallback: return a blank 1220x2712 canvas
+    dummy = Image.new('RGB', (1220, 2712), color=(20, 20, 30))
+    dummy.save(latest_path)
+    return dummy, False
 
 @app.route('/')
 def index():
@@ -223,6 +265,13 @@ def sanitize_json(obj):
 @app.route('/api/auto', methods=['GET', 'POST'])
 def auto_route():
     if request.method == 'POST':
+        if not check_csrf():
+            return jsonify({'status': 'error', 'message': 'Forbidden: Origin mismatch'}), 403
+        if not check_auth():
+            return jsonify({'status': 'error', 'message': 'Unauthorized: invalid token'}), 401
+        if not request.is_json:
+            return jsonify({'status': 'error', 'message': 'Content-Type must be application/json'}), 415
+
         data = request.json or {}
         try:
             snap = auto.configure(
@@ -263,7 +312,7 @@ def solve():
     board, gems = analyze_board(arr, fw, fh)
     pieces = detect_dock_pieces(arr, fw, fh)
 
-    sequence, score, solve_ms = solve_full_sequence(board, gems, pieces)
+    sequence, score, solve_ms = solve_full_sequence(board, gems, pieces, max_ms=cfg.SOLVER_MAX_MS)
 
     img_b64 = encode_preview(im)
     level = read_level(arr) if game_state == 'PLAYING' else None
@@ -289,6 +338,13 @@ def solve():
 
 @app.route('/api/action', methods=['POST'])
 def action():
+    if not check_csrf():
+        return jsonify({'status': 'error', 'message': 'Forbidden: Origin mismatch'}), 403
+    if not check_auth():
+        return jsonify({'status': 'error', 'message': 'Unauthorized: invalid token'}), 401
+    if not request.is_json:
+        return jsonify({'status': 'error', 'message': 'Content-Type must be application/json'}), 415
+
     data = request.json or {}
     act = data.get('action')
     if not is_device_connected():
@@ -296,13 +352,18 @@ def action():
 
     try:
         with auto._adb:
-            if act == 'retry' or act == 'next':
+            if act in ('retry', 'next'):
                 # Tap (600, 2127) for both Main Lagi and Level Selanjutnya
                 subprocess.run(['adb', 'shell', 'input', 'tap', '600', '2127'], timeout=3)
                 return jsonify({'status': 'ok', 'action': act})
             elif act == 'tap':
-                x = int(data.get('x', 600))
-                y = int(data.get('y', 2127))
+                try:
+                    x = int(data.get('x', 600))
+                    y = int(data.get('y', 2127))
+                except (ValueError, TypeError):
+                    return jsonify({'status': 'error', 'message': 'Invalid integer coordinates'}), 400
+                if x < 0 or x > 1220 or y < 0 or y > 2712:
+                    return jsonify({'status': 'error', 'message': 'Coordinates out of bounds'}), 400
                 subprocess.run(['adb', 'shell', 'input', 'tap', str(x), str(y)], timeout=3)
                 return jsonify({'status': 'ok', 'action': 'tap', 'x': x, 'y': y})
             return jsonify({'status': 'error', 'message': f'Unknown action {act}'}), 400
@@ -310,6 +371,12 @@ def action():
         return jsonify({'status': 'error', 'message': str(e)}), 500
 
 if __name__ == '__main__':
-    port = int(os.environ.get('PORT', 5000))
-    print(f"🚀 Blockzi Co-Pilot Running on http://localhost:{port}")
-    app.run(host='0.0.0.0', port=port, debug=False, threaded=True)
+    host = cfg.HOST
+    port = cfg.PORT
+    if host not in ('127.0.0.1', 'localhost', '::1') and not cfg.TOKEN:
+        print("=" * 72)
+        print("⚠️  WARNING: Server bound to non-loopback host without BLOCKZI_TOKEN!")
+        print("   Anyone on the local network can control the connected device.")
+        print("=" * 72)
+    print(f"🚀 Blockzi Co-Pilot Running on http://{host}:{port}")
+    app.run(host=host, port=port, debug=False, threaded=True)

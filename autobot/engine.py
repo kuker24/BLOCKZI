@@ -24,7 +24,15 @@ import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
 import sys
-sys.path.append("/home/fahmi/Downloads/UNF/shop/copilot")
+
+_repo_root = Path(__file__).resolve().parent.parent
+if str(_repo_root) not in sys.path:
+    sys.path.insert(0, str(_repo_root))
+if str(_repo_root / "copilot") not in sys.path:
+    sys.path.insert(0, str(_repo_root / "copilot"))
+
+import blockzi_config as cfg
+
 from solver import (  # noqa: E402
     analyze_board,
     detect_dock_pieces,
@@ -42,7 +50,7 @@ CH = BOARD_H / 8.0
 SCALE = 1.298
 LIFT = 191.0
 TARGET_LEVEL = 90
-LOG_FILE = "/home/fahmi/Downloads/UNF/shop/autobot/autobot.log"
+LOG_FILE = str(cfg.LOG_FILE)
 FONT_PATH = "/usr/share/fonts/extra/Dinreg_Regular.ttf"
 NEXT_BUTTON = (600, 2127)
 CANCEL_TAP = (1069, 195)
