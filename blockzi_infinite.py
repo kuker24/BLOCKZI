@@ -9,7 +9,6 @@ import base64
 import io
 import json
 import logging
-import os
 import subprocess
 import time
 import itertools
@@ -84,7 +83,7 @@ class ScrcpyClient:
         })
         self.req_id += 1
         self._send_notify({"jsonrpc": "2.0", "method": "notifications/initialized"})
-        res = self._send_req({
+        self._send_req({
             "jsonrpc": "2.0",
             "id": self.req_id,
             "method": "tools/call",
@@ -407,9 +406,9 @@ def run_infinite():
                     log.info(f">>> CONGRATULATIONS! REACHED TARGET LEVEL {TARGET_LEVEL}!")
                     break
 
-                log.info(f"\n==========================================")
+                log.info("\n==========================================")
                 log.info(f"          STARTING LEVEL {current_level}")
-                log.info(f"==========================================")
+                log.info("==========================================")
                 continue
 
             # 2. Check Defeat Screen

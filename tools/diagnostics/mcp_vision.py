@@ -3,7 +3,6 @@ import io
 import json
 import subprocess
 import time
-import numpy as np
 from PIL import Image
 
 def test_mcp_vision():

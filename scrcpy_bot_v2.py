@@ -50,7 +50,7 @@ class ScrcpyClient:
         })
         self.req_id += 1
         self._send_notify({"jsonrpc": "2.0", "method": "notifications/initialized"})
-        res = self._send_req({
+        self._send_req({
             "jsonrpc": "2.0",
             "id": self.req_id,
             "method": "tools/call",

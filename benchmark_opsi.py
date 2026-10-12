@@ -13,7 +13,7 @@ def benchmark_adb_native():
     proc = subprocess.run(['adb', 'exec-out', 'screencap', '-p'], stdout=subprocess.PIPE, check=True)
     t1 = time.time()
     im = Image.open(io.BytesIO(proc.stdout))
-    arr = np.array(im)
+    _ = np.array(im)
     t2 = time.time()
     
     cap_time = (t1 - t0) * 1000
@@ -22,8 +22,8 @@ def benchmark_adb_native():
     
     # 2. Input latency (dummy swipe or down-up)
     t3 = time.time()
-    subprocess.run('adb shell input motionevent DOWN 500 500', shell=True)
-    subprocess.run('adb shell input motionevent UP 500 500', shell=True)
+    subprocess.run(['adb', 'shell', 'input', 'motionevent', 'DOWN', '500', '500'], check=False, timeout=5)
+    subprocess.run(['adb', 'shell', 'input', 'motionevent', 'UP', '500', '500'], check=False, timeout=5)
     t4 = time.time()
     input_time = (t4 - t3) * 1000
     print(f"ADB motionevent input: {input_time:.1f} ms")
@@ -89,10 +89,9 @@ def benchmark_scrcpy_mcp():
             "method": "tools/call",
             "params": {"name": "screenshot", "arguments": {}}
         })
-        t1 = time.time()
         img_bytes = base64.b64decode(res['result']['content'][0]['data'])
         im = Image.open(io.BytesIO(img_bytes))
-        arr = np.array(im)
+        _ = np.array(im)
         t2 = time.time()
         perception_times.append((t2 - t0) * 1000)
 
