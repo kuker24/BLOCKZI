@@ -185,15 +185,15 @@ def solve_best_sequence(board, gems, pieces):
     return best_seq
 
 def drag_and_drop(x1, y1, x2, y2, steps=8, step_sleep=0.02):
-    subprocess.run(f'adb shell input motionevent DOWN {x1} {y1}', shell=True)
+    subprocess.run(['adb', 'shell', 'input', 'motionevent', 'DOWN', str(x1), str(y1)], check=False, timeout=5)
     time.sleep(0.06)
     for i in range(1, steps + 1):
         x = int(x1 + (x2 - x1) * i / steps)
         y = int(y1 + (y2 - y1) * i / steps)
-        subprocess.run(f'adb shell input motionevent MOVE {x} {y}', shell=True)
+        subprocess.run(['adb', 'shell', 'input', 'motionevent', 'MOVE', str(x), str(y)], check=False, timeout=5)
         time.sleep(step_sleep)
     time.sleep(0.18)
-    subprocess.run(f'adb shell input motionevent UP {x2} {y2}', shell=True)
+    subprocess.run(['adb', 'shell', 'input', 'motionevent', 'UP', str(x2), str(y2)], check=False, timeout=5)
     time.sleep(0.3)
 
 def check_victory(arr):

@@ -862,13 +862,29 @@
       }
     }
 
+    function getAuthHeaders() {
+      const headers = {'Content-Type': 'application/json'};
+      const token = localStorage.getItem('blockzi_token');
+      if (token) {
+        headers['X-Blockzi-Token'] = token;
+      }
+      return headers;
+    }
+
     async function sendAction(act) {
       try {
-        await fetch('/api/action', {
+        const res = await fetch('/api/action', {
           method: 'POST',
-          headers: {'Content-Type': 'application/json'},
+          headers: getAuthHeaders(),
           body: JSON.stringify({action: act})
         });
+        if (res.status === 401) {
+          const tok = prompt("Server requires BLOCKZI_TOKEN:");
+          if (tok) {
+            localStorage.setItem('blockzi_token', tok.trim());
+            return sendAction(act);
+          }
+        }
         setTimeout(fetchSolution, 600);
       } catch (err) {
         console.error("Action error:", err);
@@ -965,11 +981,18 @@
     }
 
     async function setAuto(enabled, speed) {
-      await fetch('/api/auto', {
+      const res = await fetch('/api/auto', {
         method: 'POST',
-        headers: {'Content-Type': 'application/json'},
+        headers: getAuthHeaders(),
         body: JSON.stringify({enabled, speed, boosters: useBoosters, revive: useRevive})
       });
+      if (res.status === 401) {
+        const tok = prompt("Server requires BLOCKZI_TOKEN:");
+        if (tok) {
+          localStorage.setItem('blockzi_token', tok.trim());
+          return setAuto(enabled, speed);
+        }
+      }
       await refreshAuto();
     }
 
