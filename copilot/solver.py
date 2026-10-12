@@ -7,7 +7,6 @@ Analyzes board, detects dock pieces adaptively, and computes optimal 3-step sequ
 import itertools
 import time
 import numpy as np
-from PIL import Image
 
 # Geometry for Xiaomi 1220x2712
 X0, Y0 = 41, 731
@@ -41,6 +40,27 @@ def analyze_board(arr, fw, fh):
                     gems[r, c] = 1
     return board, gems
 
+def get_dim_count(dim, fx=1.0):
+    """Map pixel extent to grid cell count (1..5).
+
+    Dock cell size is approx 65px at fx=1.0.
+    Midpoints between classes:
+      1 vs 2: (65 + 130) / 2 = 97.5 -> 95 * fx
+      2 vs 3: (130 + 195) / 2 = 162.5 -> 160 * fx
+      3 vs 4: (195 + 260) / 2 = 227.5 -> 228 * fx
+      4 vs 5: (260 + 325) / 2 = 292.5 -> 295 * fx
+    """
+    if dim > 295 * fx:
+        return 5
+    elif dim > 228 * fx:
+        return 4
+    elif dim > 160 * fx:
+        return 3
+    elif dim > 95 * fx:
+        return 2
+    else:
+        return 1
+
 def detect_dock_pieces(arr, fw, fh):
     fx = fw / 1220.0
     fy = fh / 2712.0
@@ -48,12 +68,6 @@ def detect_dock_pieces(arr, fw, fh):
     dock_y1 = int(1930 * fy)
     dock_y2 = int(2180 * fy)
     pieces = []
-
-    def get_dim_count(dim):
-        if dim > 230 * fx: return 5
-        elif dim > 160 * fx: return 3
-        elif dim > 95 * fx: return 2
-        else: return 1
 
     for idx, (x1, x2) in enumerate(slots):
         sub = arr[dock_y1:dock_y2, x1:x2, :3]
@@ -63,8 +77,8 @@ def detect_dock_pieces(arr, fw, fh):
             continue
         w = xs.max() - xs.min() + 1
         h = ys.max() - ys.min() + 1
-        cols = get_dim_count(w)
-        rows = get_dim_count(h)
+        cols = get_dim_count(w, fx)
+        rows = get_dim_count(h, fx)
         cw_d = w / float(cols)
         rh_d = h / float(rows)
         shape = np.zeros((rows, cols), dtype=int)
